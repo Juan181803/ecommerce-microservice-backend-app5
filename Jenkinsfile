@@ -1,9 +1,8 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.8.3-openjdk-11'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
+    agent any
+
+    tools {
+        jdk 'jdk-11'
     }
 
     environment {
@@ -118,7 +117,7 @@ pipeline {
             steps {
                 script {
                     ['user-service', 'product-service'].each {
-                        sh "./mvnw test -pl ${it}"
+                        sh "mvn test -pl ${it}"
                     }
                 }
             }
@@ -129,7 +128,7 @@ pipeline {
             steps {
                 script {
                     ['user-service', 'product-service'].each {
-                        sh "./mvnw verify -pl ${it}"
+                        sh "mvn verify -pl ${it}"
                     }
                 }
             }
@@ -138,7 +137,7 @@ pipeline {
         stage('E2E Tests') {
             when { branch 'stage' }
             steps {
-                sh './mvnw clean test -pl e2e-tests'
+                sh 'mvn clean test -pl e2e-tests'
             }
         }
 
