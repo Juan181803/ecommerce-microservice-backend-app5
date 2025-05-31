@@ -16,6 +16,11 @@ pipeline {
         stage('Setup Java') {
             steps {
                 sh '''
+                    # Instalar dependencias necesarias
+                    sudo apt-get update
+                    sudo apt-get install -y zip unzip curl
+
+                    # Instalar SDKMAN y Java
                     curl -s "https://get.sdkman.io" | bash
                     source "$HOME/.sdkman/bin/sdkman-init.sh"
                     sdk install java 11.0.12-open
