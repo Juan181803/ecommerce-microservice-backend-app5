@@ -43,6 +43,12 @@ pipeline {
             }
         }
 
+        stage('Setup Maven Wrapper') {
+            steps {
+                sh 'chmod +x mvnw'
+            }
+        }
+
         stage('Verify Tools') {
             steps {
                 sh 'java -version'
