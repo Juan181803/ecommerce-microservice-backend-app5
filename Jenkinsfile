@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'MAVEN'
+        maven 'MAVEN
+        jdk 'JDK11'
     }
 
     environment {
@@ -13,20 +14,6 @@ pipeline {
     }
 
     stages {
-        stage('Setup Java') {
-            steps {
-                sh '''
-                    # Instalar Java 11 usando apk
-                    apk add --no-cache openjdk11-jre
-                    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
-                    export PATH=$JAVA_HOME/bin:$PATH
-                    
-                    # Verificar la instalación
-                    java -version
-                '''
-            }
-        }
-
         stage('Init') {
             steps {
                 script {
@@ -61,16 +48,10 @@ pipeline {
             }
         }
 
-        stage('Setup Maven Wrapper') {
-            steps {
-                sh 'chmod +x mvnw'
-            }
-        }
-
         stage('Verify Tools') {
             steps {
                 sh 'java -version'
-                sh './mvnw -version'
+                sh 'mvn -version'
                 sh 'docker --version'
                 sh 'kubectl config current-context'
             }
@@ -85,7 +66,7 @@ pipeline {
                 }
             }
             steps {
-                sh './mvnw clean package -DskipTests'
+                sh 'mvn clean package -DskipTests'
             }
         }
 
@@ -155,6 +136,178 @@ pipeline {
             }
         }
 
+        stage('Start containers for load and stress testing') {
+            when { branch 'stage' }
+            steps {
+                script {
+                    sh '''
+                    docker network create ecommerce-test || true
+
+                    docker run -d --name zipkin-container --network ecommerce-test -p 9411:9411 openzipkin/zipkin
+
+                    docker run -d --name service-discovery-container --network ecommerce-test -p 8761:8761 \\
+                    -e SPRING_PROFILES_ACTIVE=stage \\
+                    -e SPRING_ZIPKIN_BASE_URL=http://zipkin-container:9411 \\
+                    ${DOCKERHUB_USER}/service-discovery:${IMAGE_TAG}
+
+                    until curl -s http://localhost:8761/actuator/health | grep '"status":"UP"' > /dev/null; do
+                        echo "Waiting for service discovery to be ready..."
+                        sleep 10
+                    done
+
+                    docker run -d --name cloud-config-container --network ecommerce-test -p 9296:9296 \\
+                    -e SPRING_PROFILES_ACTIVE=stage \\
+                    -e SPRING_ZIPKIN_BASE_URL=http://zipkin-container:9411 \\
+                    -e EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-discovery-container:8761/eureka/ \\
+                    -e EUREKA_INSTANCE=cloud-config-container \\
+                    ${DOCKERHUB_USER}/cloud-config:${IMAGE_TAG}
+
+                    until curl -s http://localhost:9296/actuator/health | grep '"status":"UP"' > /dev/null; do
+                        echo "Waiting for cloud config to be ready..."
+                        sleep 10
+                    done
+
+                    docker run -d --name order-service-container --network ecommerce-test -p 8300:8300 \\
+                    -e SPRING_PROFILES_ACTIVE=stage \\
+                    -e SPRING_ZIPKIN_BASE_URL=http://zipkin-container:9411 \\
+                    -e SPRING_CONFIG_IMPORT=optional:configserver:http://cloud-config-container:9296 \\
+                    -e EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery-container:8761/eureka \\
+                    -e EUREKA_INSTANCE=order-service-container \\
+                    ${DOCKERHUB_USER}/order-service:${IMAGE_TAG}
+
+                    until [ "$(curl -s http://localhost:8300/order-service/actuator/health | jq -r '.status')" = "UP" ]; do
+                        echo "Waiting for order service to be ready..."
+                        sleep 10
+                    done
+
+                    docker run -d --name payment-service-container --network ecommerce-test -p 8400:8400 \\
+                    -e SPRING_PROFILES_ACTIVE=stage \\
+                    -e SPRING_ZIPKIN_BASE_URL=http://zipkin-container:9411 \\
+                    -e SPRING_CONFIG_IMPORT=optional:configserver:http://cloud-config-container:9296 \\
+                    -e EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery-container:8761/eureka \\
+                    -e EUREKA_INSTANCE=payment-service-container \\
+                    ${DOCKERHUB_USER}/payment-service:${IMAGE_TAG}
+
+                    until [ "$(curl -s http://localhost:8400/payment-service/actuator/health | jq -r '.status')" = "UP" ]; do
+                        echo "Waiting for payment service to be ready..."
+                        sleep 10
+                    done
+
+                    docker run -d --name favourite-service-container --network ecommerce-test -p 8800:8800 \\
+                    -e SPRING_PROFILES_ACTIVE=stage \\
+                    -e SPRING_ZIPKIN_BASE_URL=http://zipkin-container:9411 \\
+                    -e SPRING_CONFIG_IMPORT=optional:configserver:http://cloud-config-container:9296 \\
+                    -e EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery-container:8761/eureka \\
+                    -e EUREKA_INSTANCE=favourite-service-container \\
+                    ${DOCKERHUB_USER}/favourite-service:${IMAGE_TAG}
+
+                    until [ "$(curl -s http://localhost:8800/favourite-service/actuator/health | jq -r '.status')" = "UP" ]; do
+                        echo "Waiting for favourite service to be ready..."
+                        sleep 10
+                    done
+                    '''
+                }
+            }
+        }
+
+        stage('Run Load Tests with Locust') {
+            when { branch 'stage' }
+            steps {
+                script {
+                    sh '''
+                    mkdir -p locust-reports
+
+                    docker run --rm --network ecommerce-test \\
+                    -v $PWD/locust-reports:/mnt/locust \\
+                    ${DOCKERHUB_USER}/locust:${IMAGE_TAG} \\
+                    -f test/order-service/locustfile.py \\
+                    --host http://order-service-container:8300 \\
+                    --headless -u 10 -r 2 -t 1m \\
+                    --only-summary \\
+                    --html /mnt/locust/order-service-report.html
+
+                    docker run --rm --network ecommerce-test \\
+                    -v $PWD/locust-reports:/mnt/locust \\
+                    ${DOCKERHUB_USER}/locust:${IMAGE_TAG} \\
+                    -f test/payment-service/locustfile.py \\
+                    --host http://payment-service-container:8400 \\
+                    --headless -u 10 -r 1 -t 1m \\
+                    --only-summary \\
+                    --html /mnt/locust/payment-service-report.html
+
+                    docker run --rm --network ecommerce-test \\
+                    -v $PWD/locust-reports:/mnt/locust \\
+                    ${DOCKERHUB_USER}/locust:${IMAGE_TAG} \\
+                    -f test/favourite-service/locustfile.py \\
+                    --host http://favourite-service-container:8800 \\
+                    --headless -u 10 -r 2 -t 1m \\
+                    --only-summary \\
+                    --html /mnt/locust/favourite-service-report.html
+                    '''
+                }
+            }
+        }
+
+        stage('Run Stress Tests with Locust') {
+            when { branch 'stage' }
+            steps {
+                script {
+                    sh '''
+                    docker run --rm --network ecommerce-test \\
+                    -v $PWD/locust-reports:/mnt/locust \\
+                    ${DOCKERHUB_USER}/locust:${IMAGE_TAG} \\
+                    -f test/order-service/locustfile.py \\
+                    --host http://order-service-container:8300 \\
+                    --headless -u 50 -r 5 -t 1m \\
+                    --only-summary \\
+                    --html /mnt/locust/order-service-stress-report.html
+
+                    docker run --rm --network ecommerce-test \\
+                    -v $PWD/locust-reports:/mnt/locust \\
+                    ${DOCKERHUB_USER}/locust:${IMAGE_TAG} \\
+                    -f test/payment-service/locustfile.py \\
+                    --host http://payment-service-container:8400 \\
+                    --headless -u 50 -r 5 -t 1m \\
+                    --only-summary \\
+                    --html /mnt/locust/payment-service-stress-report.html
+
+                    docker run --rm --network ecommerce-test \\
+                    -v $PWD/locust-reports:/mnt/locust \\
+                    ${DOCKERHUB_USER}/locust:${IMAGE_TAG} \\
+                    -f test/favourite-service/locustfile.py \\
+                    --host http://favourite-service-container:8800 \\
+                    --headless -u 50 -r 5 -t 1m \\
+                    --only-summary \\
+                    --html /mnt/locust/favourite-service-stress-report.html
+
+                    echo "✅ Pruebas de estrés completadas"
+                    '''
+                }
+            }
+        }
+
+        stage('Stop and Remove Containers') {
+            when { branch 'stage' }
+            steps {
+                script {
+                    sh '''                    
+                    docker rm -f locust || true
+                    docker rm -f favourite-service-container || true
+                    docker rm -f user-service-container || true
+                    docker rm -f shipping-service-container || true
+                    docker rm -f product-service-container || true
+                    docker rm -f payment-service-container || true
+                    docker rm -f order-service-container || true
+                    docker rm -f cloud-config-container || true
+                    docker rm -f service-discovery-container || true
+                    docker rm -f zipkin-container || true
+
+                    docker network rm ecommerce-test || true
+                    '''
+                }
+            }
+        }
+
         stage('Ensure Namespace') {
             when { branch 'master' }
             steps {
@@ -215,6 +368,12 @@ pipeline {
                     echo '🚀 Production deployment completed successfully!'
                 } else if (env.BRANCH_NAME == 'stage') {
                     echo '🎯 Staging deployment completed successfully!'
+                    publishHTML([
+                        reportDir: 'locust-reports',
+                        reportFiles: 'order-service-report.html, payment-service-report.html, favourite-service-report.html, order-service-stress-report.html, payment-service-stress-report.html, favourite-service-stress-report.html',
+                        reportName: 'Locust Stress Test Reports',
+                        keepAll: true
+                    ])
                 } else if (env.BRANCH_NAME == 'dev') {
                     echo '🔧 Development tests completed successfully!'
                 }
