@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'MAVEN'
-        jdk 'JDK11'
-    }
-
     environment {
         DOCKERHUB_USER = 'juanito0702'
         DOCKER_CREDENTIALS_ID = 'docker_hub_pwd'
