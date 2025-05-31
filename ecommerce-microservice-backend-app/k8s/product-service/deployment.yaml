@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: ecommerce
+  labels:
+    app: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+        - name: product-service
+          image: collinx0108/product-service:prod
+          ports:
+            - containerPort: 8500
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "80m"
+            limits:
+              memory: "384Mi"
+              cpu: "250m"
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: SPRING_ZIPKIN_BASE_URL
+              value: "http://zipkin:9411/"
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configserver:http://cloud-config:9296"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://service-discovery:8761/eureka/"
+            - name: EUREKA_INSTANCE
+              value: "product-service"
+            - name: SPRING_APPLICATION_NAME
+              value: "PRODUCT-SERVICE"
+            - name: SERVER_PORT
+              value: "8500"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8500
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8500
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: common-config-volume
+              mountPath: /app/config
+      volumes:
+        - name: common-config-volume
+          configMap:
+            name: common-config 

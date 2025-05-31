@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-config
+  namespace: ecommerce
+  labels:
+    app: cloud-config
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-config
+  template:
+    metadata:
+      labels:
+        app: cloud-config
+    spec:
+      containers:
+        - name: cloud-config
+          image: collinx0108/cloud-config:prod
+          ports:
+            - containerPort: 9296
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "80m"
+            limits:
+              memory: "384Mi"
+              cpu: "250m"
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: SPRING_APPLICATION_NAME
+              value: "CLOUD-CONFIG"
+            - name: SERVER_PORT
+              value: "9296"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 9296
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 9296
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3 
