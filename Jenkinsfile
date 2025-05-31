@@ -45,7 +45,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Juan181803/ecommerce-microservice-backend-app5.git'
+                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Juan181803/ecommerce-microservice-backend-app5'
             }
         }
 
