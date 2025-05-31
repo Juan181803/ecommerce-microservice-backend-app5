@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: shipping-service
-          image: collinx0108/shipping-service:prod
+          image: juanito0702/shipping-service-ecommerce-boot:0.1.0
           ports:
             - containerPort: 8600
           resources:

@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     tools {
-        maven 'withMaven'
-        jdk 'JDK_11'
+        maven 'MAVEN'
+        jdk 'JDK11'
     }
 
     environment {
-        DOCKERHUB_USER = 'collinx0108'
+        DOCKERHUB_USER = 'juanito0702'
         DOCKER_CREDENTIALS_ID = 'docker_hub_pwd'
         SERVICES = 'api-gateway cloud-config favourite-service order-service payment-service product-service proxy-client service-discovery shipping-service user-service'
         K8S_NAMESPACE = 'ecommerce'
@@ -21,7 +21,7 @@ pipeline {
                     def profileConfig = [
                         master : ['prod', '-prod'],
                         stage: ['stage', '-stage'],
-                        develop: ['dev', '-dev']
+                        dev: ['dev', '-dev']
                     ]
                     def config = profileConfig.get(env.BRANCH_NAME, ['dev', '-dev'])
 
@@ -31,20 +31,20 @@ pipeline {
 
                     env.IS_MASTER = env.BRANCH_NAME == 'master' ? 'true' : 'false'
                     env.IS_STAGE = env.BRANCH_NAME == 'stage' ? 'true' : 'false'
-                    env.IS_DEVELOP = env.BRANCH_NAME == 'develop' ? 'true' : 'false'
+                    env.IS_DEV = env.BRANCH_NAME == 'dev' ? 'true' : 'false'
                     env.IS_FEATURE = env.BRANCH_NAME.startsWith('feature/') ? 'true' : 'false'
 
                     echo "Spring profile: ${env.SPRING_PROFILES_ACTIVE}"
                     echo "Image tag: ${env.IMAGE_TAG}"
                     echo "Deployment suffix: ${env.DEPLOYMENT_SUFFIX}"
-                    echo "Flags: IS_MASTER=${env.IS_MASTER}, IS_STAGE=${env.IS_STAGE}, IS_DEVELOP=${env.IS_DEVELOP}, IS_FEATURE=${env.IS_FEATURE}"
+                    echo "Flags: IS_MASTER=${env.IS_MASTER}, IS_STAGE=${env.IS_STAGE}, IS_DEV=${env.IS_DEV}, IS_FEATURE=${env.IS_FEATURE}"
                 }
             }
         }
 
         stage('Checkout') {
             steps {
-                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/collinx0108/ecommerce-microservice-backend-app'
+                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Juan181803/ecommerce-microservice-backend-app5.git'
             }
         }
 
@@ -60,7 +60,7 @@ pipeline {
         stage('Build Services') {
             when {
                 anyOf {
-                    branch 'develop'
+                    branch 'dev'
                     branch 'stage'
                     branch 'master'
                 }
@@ -73,7 +73,7 @@ pipeline {
         stage('Build Docker Images') {
             when {
                 anyOf {
-                    branch 'develop'
+                    branch 'dev'
                     branch 'stage'
                     branch 'master'
                 }
@@ -90,7 +90,7 @@ pipeline {
         stage('Push Docker Images') {
             when {
                 anyOf {
-                    branch 'develop'
+                    branch 'dev'
                     branch 'stage'
                     branch 'master'
                 }
@@ -108,7 +108,7 @@ pipeline {
         }
 
         stage('Unit Tests') {
-            when { branch 'develop' }
+            when { branch 'dev' }
             steps {
                 script {
                     ['user-service', 'product-service'].each {
@@ -196,7 +196,7 @@ pipeline {
                     echo '🚀 Production deployment completed successfully!'
                 } else if (env.BRANCH_NAME == 'stage') {
                     echo '🎯 Staging deployment completed successfully!'
-                } else if (env.BRANCH_NAME == 'develop') {
+                } else if (env.BRANCH_NAME == 'dev') {
                     echo '🔧 Development tests completed successfully!'
                 }
             }

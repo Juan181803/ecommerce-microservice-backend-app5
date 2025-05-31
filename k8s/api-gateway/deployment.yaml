@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: collinx0108/api-gateway:prod
+          image: juanito0702/api-gateway-ecommerce-boot:0.1.0
           ports:
             - containerPort: 8080
           resources:

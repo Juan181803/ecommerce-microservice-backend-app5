@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: collinx0108/order-service:prod
+          image: juanito0702/order-service-ecommerce-boot:0.1.0
           ports:
             - containerPort: 8300
           resources:

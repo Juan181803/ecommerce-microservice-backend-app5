@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: collinx0108/user-service:prod
+          image: juanito0702/user-service-ecommerce-boot:0.1.0
           ports:
             - containerPort: 8700
           resources:

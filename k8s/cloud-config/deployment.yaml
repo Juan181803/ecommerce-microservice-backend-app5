@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: cloud-config
-          image: collinx0108/cloud-config:prod
+          image: juanito0702/cloud-config-ecommerce-boot:0.1.0
           ports:
             - containerPort: 9296
           resources:
