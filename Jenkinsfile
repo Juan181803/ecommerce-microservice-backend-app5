@@ -46,7 +46,7 @@ pipeline {
         stage('Verify Tools') {
             steps {
                 sh 'java -version'
-                sh 'mvn -version'
+                sh './mvnw -version'
                 sh 'docker --version'
                 sh 'kubectl config current-context'
             }
@@ -61,7 +61,7 @@ pipeline {
                 }
             }
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh './mvnw clean package -DskipTests'
             }
         }
 
@@ -107,7 +107,7 @@ pipeline {
             steps {
                 script {
                     ['user-service', 'product-service'].each {
-                        sh "mvn test -pl ${it}"
+                        sh "./mvnw test -pl ${it}"
                     }
                 }
             }
@@ -118,7 +118,7 @@ pipeline {
             steps {
                 script {
                     ['user-service', 'product-service'].each {
-                        sh "mvn verify -pl ${it}"
+                        sh "./mvnw verify -pl ${it}"
                     }
                 }
             }
@@ -127,7 +127,7 @@ pipeline {
         stage('E2E Tests') {
             when { branch 'stage' }
             steps {
-                sh 'mvn clean test -pl e2e-tests'
+                sh './mvnw clean test -pl e2e-tests'
             }
         }
 
